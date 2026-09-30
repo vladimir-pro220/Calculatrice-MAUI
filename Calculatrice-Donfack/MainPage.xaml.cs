@@ -1,4 +1,6 @@
 ﻿using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Calculatrice_Donfack;
 
@@ -6,8 +8,10 @@ public partial class MainPage : ContentPage
 {
     // Nombre maximal de chiffres que l'on peut saisir
     private const int ChiffresMax = 15;
+    private const int HistoriqueMax = 30;
     private const string MessageDivisionParZero = "Division par zéro impossible";
     private const string MessageTropGrand = "Résultat trop grand";
+    private const string MessageEntreeInvalide = "Entrée invalide";
 
     // Texte du nombre en cours de saisie (le point sert de séparateur interne)
     private string _entree = "0";
@@ -22,8 +26,20 @@ public partial class MainPage : ContentPage
     // Vrai quand le prochain chiffre doit démarrer un nouveau nombre
     private bool _nouvelleSaisie;
 
+    // Vrai quand le nombre affiché vient d'être calculé (mémoire, √, x²...) :
+    // le prochain chiffre le remplace, sans interrompre une opération en attente
+    private bool _ecraser;
+
     // Vrai quand l'écran affiche un message d'erreur
     private bool _erreur;
+
+    // Mémoire de la calculatrice (MC, MR, M+, M−)
+    private double _memoire;
+    private bool _aMemoire;
+
+    // Panneaux affichés ou non
+    private bool _historiqueVisible;
+    private bool _avanceVisible;
 
     // Orientation actuelle (null tant qu'elle n'est pas connue)
     private bool? _paysage;
@@ -110,12 +126,14 @@ public partial class MainPage : ContentPage
     }
 
     // ------------------------------------------------------------------
-    // Gestionnaires d'événements
+    // Gestionnaires d'événements : saisie et opérations de base
     // ------------------------------------------------------------------
     private void OnChiffreClicked(object? sender, EventArgs e)
     {
         if (sender is not Button bouton)
             return;
+
+        Vibrer();
 
         if (_erreur)
             Reinitialiser();
@@ -132,6 +150,8 @@ public partial class MainPage : ContentPage
 
     private void OnVirguleClicked(object? sender, EventArgs e)
     {
+        Vibrer();
+
         if (_erreur)
             Reinitialiser();
 
@@ -147,6 +167,8 @@ public partial class MainPage : ContentPage
     {
         if (sender is not Button bouton)
             return;
+
+        Vibrer();
 
         if (_erreur)
             Reinitialiser();
@@ -177,6 +199,7 @@ public partial class MainPage : ContentPage
 
         _operateur = operateur;
         _nouvelleSaisie = true;
+        _ecraser = false;
         _expression = $"{Formater(_operande!.Value)} {operateur}";
 
         MettreAJourAffichage();
@@ -186,6 +209,8 @@ public partial class MainPage : ContentPage
     {
         if (_erreur || _operateur == null || !_operande.HasValue)
             return;
+
+        Vibrer();
 
         double a = _operande.Value;
         double b = LireEntree();
@@ -204,12 +229,15 @@ public partial class MainPage : ContentPage
         _operande = null;
         _operateur = null;
         _nouvelleSaisie = true;
+        _ecraser = false;
 
+        AjouterHistorique(_expression, _entree);
         MettreAJourAffichage();
     }
 
     private void OnToutEffacerClicked(object? sender, EventArgs e)
     {
+        Vibrer();
         Reinitialiser();
         MettreAJourAffichage();
     }
@@ -224,7 +252,7 @@ public partial class MainPage : ContentPage
         }
 
         // On n'efface pas un résultat déjà calculé
-        if (_nouvelleSaisie)
+        if (_nouvelleSaisie || _ecraser)
             return;
 
         _entree = _entree.Length <= 1 ? "0" : _entree[..^1];
@@ -274,7 +302,232 @@ public partial class MainPage : ContentPage
 
         _entree = Formater(valeur);
         _nouvelleSaisie = _operateur == null;
+        _ecraser = _operateur != null;
 
+        MettreAJourAffichage();
+    }
+
+    // ------------------------------------------------------------------
+    // Fonctionnalités supplémentaires : fonctions avancées
+    // ------------------------------------------------------------------
+    private void OnFonctionClicked(object? sender, EventArgs e)
+    {
+        if (sender is not Button bouton)
+            return;
+
+        Vibrer();
+
+        if (_erreur)
+            Reinitialiser();
+
+        double v = LireEntree();
+        string texte = Formater(v);
+        string expression;
+        double resultat;
+
+        switch (bouton.Text)
+        {
+            case "x²":
+                expression = $"({texte})²";
+                resultat = v * v;
+                break;
+
+            case "√":
+                expression = $"√({texte})";
+                if (v < 0)
+                {
+                    AfficherMessage(MessageEntreeInvalide, expression);
+                    return;
+                }
+                resultat = Math.Sqrt(v);
+                break;
+
+            case "1/x":
+                expression = $"1/({texte})";
+                if (v == 0)
+                {
+                    AfficherMessage(MessageDivisionParZero, expression);
+                    return;
+                }
+                resultat = 1 / v;
+                break;
+
+            case "π":
+                // Insère la constante, sans passer par l'historique
+                AppliquerResultat(Math.PI, null);
+                return;
+
+            default:
+                return;
+        }
+
+        if (double.IsNaN(resultat) || double.IsInfinity(resultat))
+        {
+            AfficherErreur(resultat, expression);
+            return;
+        }
+
+        AppliquerResultat(resultat, expression);
+    }
+
+    // ------------------------------------------------------------------
+    // Fonctionnalités supplémentaires : mémoire
+    // ------------------------------------------------------------------
+    private void OnMemoireClicked(object? sender, EventArgs e)
+    {
+        if (sender is not Button bouton)
+            return;
+
+        Vibrer();
+
+        if (_erreur)
+            Reinitialiser();
+
+        switch (bouton.Text)
+        {
+            case "MC":
+                _memoire = 0;
+                _aMemoire = false;
+                break;
+
+            case "MR":
+                AppliquerResultat(_memoire, null);
+                return;
+
+            case "M+":
+                _memoire += LireEntree();
+                _aMemoire = true;
+                _ecraser = true;
+                break;
+
+            case "M−":
+                _memoire -= LireEntree();
+                _aMemoire = true;
+                _ecraser = true;
+                break;
+        }
+
+        MettreAJourAffichage();
+    }
+
+    // ------------------------------------------------------------------
+    // Fonctionnalités supplémentaires : historique, panneau avancé, copie
+    // ------------------------------------------------------------------
+    private void OnHistoriqueClicked(object? sender, EventArgs e)
+    {
+        BasculerHistorique(!_historiqueVisible);
+    }
+
+    private void OnViderHistoriqueClicked(object? sender, EventArgs e)
+    {
+        HistoriqueListe.Clear();
+        HistoriqueVideLabel.IsVisible = true;
+    }
+
+    private void OnAvanceClicked(object? sender, EventArgs e)
+    {
+        _avanceVisible = !_avanceVisible;
+        AvanceGrid.IsVisible = _avanceVisible;
+        ColorerBoutonActif(AvanceBouton, _avanceVisible);
+    }
+
+    // Un appui sur le résultat le copie dans le presse-papiers
+    private async void OnResultatTapped(object? sender, TappedEventArgs e)
+    {
+        if (_erreur)
+            return;
+
+        try
+        {
+            await Clipboard.Default.SetTextAsync(_entree.Replace('.', ','));
+            Vibrer();
+
+            ExpressionLabel.Text = "Résultat copié ✓";
+            await Task.Delay(1300);
+            MettreAJourAffichage();
+        }
+        catch
+        {
+            // Presse-papiers indisponible : on ignore
+        }
+    }
+
+    private void BasculerHistorique(bool visible)
+    {
+        _historiqueVisible = visible;
+        HistoriquePanel.IsVisible = visible;
+        ResultatStack.IsVisible = !visible;
+        ColorerBoutonActif(HistoriqueBouton, visible);
+    }
+
+    private static void ColorerBoutonActif(Button bouton, bool actif)
+    {
+        if (actif)
+        {
+            bouton.BackgroundColor = Color.FromArgb("#5B3DF5");
+            bouton.TextColor = Colors.White;
+        }
+        else
+        {
+            bouton.ClearValue(VisualElement.BackgroundColorProperty);
+            bouton.ClearValue(Button.TextColorProperty);
+        }
+    }
+
+    private void AjouterHistorique(string expression, string resultat)
+    {
+        var ligne = new VerticalStackLayout { Spacing = 0 };
+
+        ligne.Add(new Label
+        {
+            Text = Affichable(expression),
+            FontSize = 12,
+            TextColor = Color.FromArgb("#8B95B5"),
+            HorizontalTextAlignment = TextAlignment.End,
+            LineBreakMode = LineBreakMode.HeadTruncation
+        });
+        ligne.Add(new Label
+        {
+            Text = Affichable(resultat),
+            FontSize = 20,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Colors.White,
+            HorizontalTextAlignment = TextAlignment.End,
+            LineBreakMode = LineBreakMode.HeadTruncation
+        });
+
+        // Un appui sur une ligne réutilise son résultat
+        var geste = new TapGestureRecognizer();
+        geste.Tapped += (_, _) => ReprendreDepuisHistorique(resultat);
+        ligne.GestureRecognizers.Add(geste);
+
+        HistoriqueListe.Insert(0, ligne);
+        while (HistoriqueListe.Count > HistoriqueMax)
+            HistoriqueListe.RemoveAt(HistoriqueListe.Count - 1);
+
+        HistoriqueVideLabel.IsVisible = false;
+    }
+
+    private void ReprendreDepuisHistorique(string valeur)
+    {
+        if (_erreur)
+            Reinitialiser();
+
+        _entree = valeur;
+
+        if (_operateur == null)
+        {
+            _expression = "";
+            _nouvelleSaisie = true;
+            _ecraser = false;
+        }
+        else
+        {
+            _nouvelleSaisie = false;
+            _ecraser = true;
+        }
+
+        BasculerHistorique(false);
         MettreAJourAffichage();
     }
 
@@ -283,6 +536,13 @@ public partial class MainPage : ContentPage
     // ------------------------------------------------------------------
     private void DemarrerNouvelleSaisieSiNecessaire()
     {
+        // Un nombre calculé (mémoire, √...) est remplacé par le prochain chiffre
+        if (_ecraser)
+        {
+            _entree = "0";
+            _ecraser = false;
+        }
+
         if (!_nouvelleSaisie)
             return;
 
@@ -292,6 +552,31 @@ public partial class MainPage : ContentPage
 
         _entree = "0";
         _nouvelleSaisie = false;
+    }
+
+    // Affiche un résultat calculé par une fonction (√, x², 1/x, π, MR)
+    private void AppliquerResultat(double resultat, string? expression)
+    {
+        _entree = Formater(resultat);
+
+        if (_operateur == null)
+        {
+            // Pas d'opération en attente : le résultat est final
+            _expression = expression == null ? "" : expression + " =";
+            _nouvelleSaisie = true;
+            _ecraser = false;
+        }
+        else
+        {
+            // Opération en attente : le résultat devient le second opérande
+            _nouvelleSaisie = false;
+            _ecraser = true;
+        }
+
+        if (expression != null)
+            AjouterHistorique(expression + " =", _entree);
+
+        MettreAJourAffichage();
     }
 
     private static double Calculer(double a, string operateur, double b)
@@ -308,11 +593,17 @@ public partial class MainPage : ContentPage
 
     private void AfficherErreur(double resultat, string expression)
     {
-        _entree = double.IsNaN(resultat) ? MessageDivisionParZero : MessageTropGrand;
+        AfficherMessage(double.IsNaN(resultat) ? MessageDivisionParZero : MessageTropGrand, expression);
+    }
+
+    private void AfficherMessage(string message, string expression)
+    {
+        _entree = message;
         _expression = expression;
         _operande = null;
         _operateur = null;
         _nouvelleSaisie = true;
+        _ecraser = false;
         _erreur = true;
 
         MettreAJourAffichage();
@@ -325,6 +616,7 @@ public partial class MainPage : ContentPage
         _operateur = null;
         _expression = "";
         _nouvelleSaisie = false;
+        _ecraser = false;
         _erreur = false;
     }
 
@@ -348,11 +640,48 @@ public partial class MainPage : ContentPage
         return valeur.ToString(format, CultureInfo.InvariantCulture);
     }
 
+    // Retour haptique léger sur mobile (ignoré sur ordinateur)
+    private static void Vibrer()
+    {
+        try
+        {
+            if (HapticFeedback.Default.IsSupported)
+                HapticFeedback.Default.Perform(HapticFeedbackType.Click);
+        }
+        catch
+        {
+            // Non pris en charge : on ignore
+        }
+    }
+
+    // Sépare les milliers (1 234 567) sans toucher aux décimales
+    private static string GrouperMilliers(string texte)
+    {
+        return Regex.Replace(texte, @"(?<![\d.])\d{4,}", m =>
+        {
+            string chiffres = m.Value;
+            var sb = new StringBuilder();
+            for (int i = 0; i < chiffres.Length; i++)
+            {
+                if (i > 0 && (chiffres.Length - i) % 3 == 0)
+                    sb.Append('\u00A0');
+                sb.Append(chiffres[i]);
+            }
+            return sb.ToString();
+        });
+    }
+
+    // Texte interne -> texte affiché : milliers séparés et virgule française
+    private static string Affichable(string texte)
+    {
+        return GrouperMilliers(texte).Replace('.', ',');
+    }
+
     private void MettreAJourAffichage()
     {
-        // À l'écran, on affiche la virgule française
-        ExpressionLabel.Text = _expression.Replace('.', ',');
-        ResultatLabel.Text = _entree.Replace('.', ',');
+        ExpressionLabel.Text = Affichable(_expression);
+        ResultatLabel.Text = Affichable(_entree);
+        MemoireLabel.IsVisible = _aMemoire;
 
         // Réduit la taille de la police quand le nombre s'allonge
         int longueur = ResultatLabel.Text.Length;

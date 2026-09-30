@@ -67,6 +67,37 @@
             <Setter Property="FontSize" Value="24" />
         </Style>
 
+        <!-- Petits boutons de l'en-tête (HIST, fx, Vider) -->
+        <Style x:Key="BoutonMini" TargetType="Button" BasedOn="{StaticResource BoutonBase}">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="HeightRequest" Value="28" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="BorderWidth" Value="0" />
+            <Setter Property="BackgroundColor" Value="#1F2A44" />
+            <Setter Property="TextColor" Value="#7DD3FC" />
+        </Style>
+
+        <!-- Fonctions avancées : x², √, 1/x, π -->
+        <Style x:Key="BoutonAvance" TargetType="Button" BasedOn="{StaticResource BoutonBase}">
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="CornerRadius" Value="22" />
+            <Setter Property="HeightRequest" Value="44" />
+            <Setter Property="Margin" Value="4,3" />
+            <Setter Property="BackgroundColor" Value="#0F1A30" />
+            <Setter Property="BorderColor" Value="#22335A" />
+            <Setter Property="TextColor" Value="#A5B4FC" />
+        </Style>
+
+        <!-- Mémoire : MC, MR, M+, M− en vert menthe -->
+        <Style x:Key="BoutonMemoire" TargetType="Button" BasedOn="{StaticResource BoutonAvance}">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="BackgroundColor" Value="#0C1E22" />
+            <Setter Property="BorderColor" Value="#15473F" />
+            <Setter Property="TextColor" Value="#34E8B5" />
+        </Style>
+
         <!-- Opérateurs : dégradé violet indigo -->
         <Style x:Key="BoutonOperateur" TargetType="Button" BasedOn="{StaticResource BoutonBase}">
             <Setter Property="BorderWidth" Value="0" />
@@ -141,23 +172,45 @@
 
                     <Grid RowDefinitions="Auto,*">
 
-                        <!-- Layout 3 : HorizontalStackLayout, barre de titre de l'écran -->
-                        <HorizontalStackLayout Grid.Row="0" Spacing="10">
-                            <BoxView WidthRequest="8"
+                        <!-- Layout 3 : HorizontalStackLayout, boutons de l'en-tête (mémoire, historique, fonctions) -->
+                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <BoxView Grid.Column="0"
+                                     WidthRequest="8"
                                      HeightRequest="8"
                                      CornerRadius="4"
                                      Color="#34E8B5"
                                      VerticalOptions="Center" />
-                            <Label Text="CALCULATRICE"
-                                   FontSize="12"
+                            <Label Grid.Column="1"
+                                   Text="VLADIMIR CALCULATOR"
+                                   FontSize="11"
                                    FontAttributes="Bold"
-                                   CharacterSpacing="3"
+                                   CharacterSpacing="2"
                                    TextColor="#7C8AB8"
+                                   LineBreakMode="TailTruncation"
                                    VerticalOptions="Center" />
-                        </HorizontalStackLayout>
+                            <HorizontalStackLayout Grid.Column="2" Spacing="6" VerticalOptions="Center">
+                                <Label x:Name="MemoireLabel"
+                                       Text="M"
+                                       IsVisible="False"
+                                       FontSize="13"
+                                       FontAttributes="Bold"
+                                       TextColor="#34E8B5"
+                                       VerticalOptions="Center" />
+                                <Button x:Name="HistoriqueBouton"
+                                        Text="HIST"
+                                        Style="{StaticResource BoutonMini}"
+                                        Clicked="OnHistoriqueClicked"
+                                        SemanticProperties.Description="Afficher l'historique" />
+                                <Button x:Name="AvanceBouton"
+                                        Text="fx"
+                                        Style="{StaticResource BoutonMini}"
+                                        Clicked="OnAvanceClicked"
+                                        SemanticProperties.Description="Fonctions avancées et mémoire" />
+                            </HorizontalStackLayout>
+                        </Grid>
 
                         <!-- Layout 4 : VerticalStackLayout, opération en cours au-dessus du résultat -->
-                        <VerticalStackLayout Grid.Row="1" VerticalOptions="End" Spacing="2">
+                        <VerticalStackLayout x:Name="ResultatStack" Grid.Row="1" VerticalOptions="End" Spacing="2">
 
                             <Label x:Name="ExpressionLabel"
                                    Text=""
@@ -179,10 +232,46 @@
                                        TextColor="White"
                                        LineBreakMode="NoWrap"
                                        HorizontalTextAlignment="End"
-                                       VerticalOptions="Center" />
+                                       VerticalOptions="Center">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnResultatTapped" />
+                                    </Label.GestureRecognizers>
+                                </Label>
                             </ScrollView>
 
                         </VerticalStackLayout>
+
+                        <!-- Panneau d'historique : remplace le résultat quand il est affiché -->
+                        <Grid x:Name="HistoriquePanel"
+                              Grid.Row="1"
+                              IsVisible="False"
+                              RowDefinitions="Auto,*"
+                              RowSpacing="6"
+                              Margin="0,8,0,0">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                <Label Text="HISTORIQUE"
+                                       FontSize="11"
+                                       FontAttributes="Bold"
+                                       CharacterSpacing="2"
+                                       TextColor="#7C8AB8"
+                                       VerticalOptions="Center" />
+                                <Button Grid.Column="1"
+                                        Text="Vider"
+                                        Style="{StaticResource BoutonMini}"
+                                        Clicked="OnViderHistoriqueClicked"
+                                        SemanticProperties.Description="Vider l'historique" />
+                            </Grid>
+                            <ScrollView Grid.Row="1" VerticalScrollBarVisibility="Never">
+                                <VerticalStackLayout x:Name="HistoriqueListe" Spacing="6" />
+                            </ScrollView>
+                            <Label x:Name="HistoriqueVideLabel"
+                                   Grid.Row="1"
+                                   Text="Aucun calcul pour l'instant"
+                                   FontSize="14"
+                                   TextColor="#6B7599"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center" />
+                        </Grid>
                     </Grid>
                 </Border>
 
@@ -190,65 +279,83 @@
                 <Grid x:Name="ClavierGrid"
                       Grid.Row="1"
                       Grid.Column="0"
-                      RowDefinitions="*,*,*,*,*"
+                      RowDefinitions="Auto,*,*,*,*,*"
                       ColumnDefinitions="*,*,*,*">
 
+                    <!-- Panneau avancé (bouton fx) : mémoire et fonctions -->
+                    <Grid x:Name="AvanceGrid"
+                          Grid.Row="0"
+                          Grid.Column="0"
+                          Grid.ColumnSpan="4"
+                          IsVisible="False"
+                          RowDefinitions="Auto,Auto"
+                          ColumnDefinitions="*,*,*,*">
+                        <Button Grid.Row="0" Grid.Column="0" Text="MC" Style="{StaticResource BoutonMemoire}" Clicked="OnMemoireClicked" SemanticProperties.Description="Effacer la mémoire" />
+                        <Button Grid.Row="0" Grid.Column="1" Text="MR" Style="{StaticResource BoutonMemoire}" Clicked="OnMemoireClicked" SemanticProperties.Description="Rappeler la mémoire" />
+                        <Button Grid.Row="0" Grid.Column="2" Text="M+" Style="{StaticResource BoutonMemoire}" Clicked="OnMemoireClicked" SemanticProperties.Description="Ajouter à la mémoire" />
+                        <Button Grid.Row="0" Grid.Column="3" Text="M−" Style="{StaticResource BoutonMemoire}" Clicked="OnMemoireClicked" SemanticProperties.Description="Soustraire de la mémoire" />
+                        <Button Grid.Row="1" Grid.Column="0" Text="x²" Style="{StaticResource BoutonAvance}" Clicked="OnFonctionClicked" SemanticProperties.Description="Carré" />
+                        <Button Grid.Row="1" Grid.Column="1" Text="√" Style="{StaticResource BoutonAvance}" Clicked="OnFonctionClicked" SemanticProperties.Description="Racine carrée" />
+                        <Button Grid.Row="1" Grid.Column="2" Text="1/x" Style="{StaticResource BoutonAvance}" Clicked="OnFonctionClicked" SemanticProperties.Description="Inverse" />
+                        <Button Grid.Row="1" Grid.Column="3" Text="π" Style="{StaticResource BoutonAvance}" Clicked="OnFonctionClicked" SemanticProperties.Description="Pi" />
+                    </Grid>
+
                     <!-- Ligne 0 -->
-                    <Button Grid.Row="0" Grid.Column="0" Text="C"
+                    <Button Grid.Row="1" Grid.Column="0" Text="C"
                             Style="{StaticResource BoutonEffacer}"
                             Clicked="OnToutEffacerClicked"
                             SemanticProperties.Description="Tout effacer" />
-                    <Button Grid.Row="0" Grid.Column="1" Text="⌫"
+                    <Button Grid.Row="1" Grid.Column="1" Text="⌫"
                             Style="{StaticResource BoutonFonction}"
                             Clicked="OnRetourArriereClicked"
                             SemanticProperties.Description="Effacer le dernier caractère" />
-                    <Button Grid.Row="0" Grid.Column="2" Text="%"
+                    <Button Grid.Row="1" Grid.Column="2" Text="%"
                             Style="{StaticResource BoutonFonction}"
                             Clicked="OnPourcentageClicked"
                             SemanticProperties.Description="Pourcentage" />
-                    <Button Grid.Row="0" Grid.Column="3" Text="÷"
+                    <Button Grid.Row="1" Grid.Column="3" Text="÷"
                             Style="{StaticResource BoutonOperateur}"
                             Clicked="OnOperateurClicked"
                             SemanticProperties.Description="Diviser" />
 
                     <!-- Ligne 1 -->
-                    <Button Grid.Row="1" Grid.Column="0" Text="7" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="1" Grid.Column="1" Text="8" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="1" Grid.Column="2" Text="9" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="1" Grid.Column="3" Text="×"
+                    <Button Grid.Row="2" Grid.Column="0" Text="7" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="2" Grid.Column="1" Text="8" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="2" Grid.Column="2" Text="9" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="2" Grid.Column="3" Text="×"
                             Style="{StaticResource BoutonOperateur}"
                             Clicked="OnOperateurClicked"
                             SemanticProperties.Description="Multiplier" />
 
                     <!-- Ligne 2 -->
-                    <Button Grid.Row="2" Grid.Column="0" Text="4" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="2" Grid.Column="1" Text="5" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="2" Grid.Column="2" Text="6" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="2" Grid.Column="3" Text="−"
+                    <Button Grid.Row="3" Grid.Column="0" Text="4" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="3" Grid.Column="1" Text="5" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="3" Grid.Column="2" Text="6" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="3" Grid.Column="3" Text="−"
                             Style="{StaticResource BoutonOperateur}"
                             Clicked="OnOperateurClicked"
                             SemanticProperties.Description="Soustraire" />
 
                     <!-- Ligne 3 -->
-                    <Button Grid.Row="3" Grid.Column="0" Text="1" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="3" Grid.Column="1" Text="2" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="3" Grid.Column="2" Text="3" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="3" Grid.Column="3" Text="+"
+                    <Button Grid.Row="4" Grid.Column="0" Text="1" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="4" Grid.Column="1" Text="2" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="4" Grid.Column="2" Text="3" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="4" Grid.Column="3" Text="+"
                             Style="{StaticResource BoutonOperateur}"
                             Clicked="OnOperateurClicked"
                             SemanticProperties.Description="Additionner" />
 
                     <!-- Ligne 4 -->
-                    <Button Grid.Row="4" Grid.Column="0" Text="±"
+                    <Button Grid.Row="5" Grid.Column="0" Text="±"
                             Style="{StaticResource BoutonFonction}"
                             Clicked="OnChangementSigneClicked"
                             SemanticProperties.Description="Changer le signe" />
-                    <Button Grid.Row="4" Grid.Column="1" Text="0" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
-                    <Button Grid.Row="4" Grid.Column="2" Text=","
+                    <Button Grid.Row="5" Grid.Column="1" Text="0" Style="{StaticResource BoutonChiffre}" Clicked="OnChiffreClicked" />
+                    <Button Grid.Row="5" Grid.Column="2" Text=","
                             Style="{StaticResource BoutonChiffre}"
                             Clicked="OnVirguleClicked"
                             SemanticProperties.Description="Virgule décimale" />
-                    <Button Grid.Row="4" Grid.Column="3" Text="="
+                    <Button Grid.Row="5" Grid.Column="3" Text="="
                             Style="{StaticResource BoutonEgal}"
                             Clicked="OnEgalClicked"
                             SemanticProperties.Description="Calculer le résultat" />
